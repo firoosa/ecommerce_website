@@ -8,6 +8,9 @@ import {
   deleteProduct,
   uploadProductImage,
   deleteProductImage,
+  createProductVariant,
+  updateProductVariant,
+  deleteProductVariant,
 } from '../../api/services'
 import toast from 'react-hot-toast'
 
@@ -23,6 +26,8 @@ export default function AdminProducts() {
   const [bulkColors, setBulkColors] = useState('')
   const [bulkSizes, setBulkSizes] = useState('')
   const [creatingBulk, setCreatingBulk] = useState(false)
+  const [variants, setVariants] = useState([])
+  const [initialVariantIds, setInitialVariantIds] = useState([])
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -64,6 +69,8 @@ export default function AdminProducts() {
     setBulkColors('')
     setBulkSizes('')
     setIsBulkMode(false)
+    setVariants([])
+    setInitialVariantIds([])
     setFormData({
       name: '',
       description: '',
@@ -98,12 +105,24 @@ export default function AdminProducts() {
       category: p.category || '',
       is_active: p.is_active ?? true,
     })
-    // Fetch full product details with images
+    // Fetch full product details with images & variants
     try {
       const res = await getProduct(p.slug)
       setProductImages(res.data?.images || [])
+      const v = res.data?.variants || []
+      setVariants(
+        v.map((item) => ({
+          id: item.id,
+          size: item.size || '',
+          color: item.color || '',
+          stock: item.stock ?? 0,
+        })),
+      )
+      setInitialVariantIds(v.map((item) => item.id))
     } catch (err) {
       setProductImages([])
+      setVariants([])
+      setInitialVariantIds([])
     }
   }
 
@@ -168,11 +187,21 @@ export default function AdminProducts() {
           }
         }
       }
-      // Reload images if editing existing product
+      // Reload images (and variants) if editing existing product
       if (editingSlug && newSlug) {
         try {
           const res = await getProduct(newSlug)
           setProductImages(res.data?.images || [])
+          const v = res.data?.variants || []
+          setVariants(
+            v.map((item) => ({
+              id: item.id,
+              size: item.size || '',
+              color: item.color || '',
+              stock: item.stock ?? 0,
+            })),
+          )
+          setInitialVariantIds(v.map((item) => item.id))
         } catch (err) {
           // Ignore error
         }
@@ -364,6 +393,73 @@ export default function AdminProducts() {
       toast.error('Bulk creation failed')
     } finally {
       setCreatingBulk(false)
+    }
+  }
+
+  const handleVariantChange = (index, field, value) => {
+    setVariants((prev) =>
+      prev.map((v, i) =>
+        i === index ? { ...v, [field]: field === 'stock' ? Number(value || 0) : value } : v,
+      ),
+    )
+  }
+
+  const handleAddVariantRow = () => {
+    setVariants((prev) => [...prev, { id: null, size: '', color: '', stock: 0 }])
+  }
+
+  const handleRemoveVariantRow = (index) => {
+    setVariants((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSaveVariants = async () => {
+    if (!editingSlug) {
+      toast.error('Save the product before managing variants')
+      return
+    }
+    try {
+      // Delete variants that were removed
+      const currentIds = variants.filter((v) => v.id).map((v) => v.id)
+      const toDelete = initialVariantIds.filter((id) => !currentIds.includes(id))
+      for (const id of toDelete) {
+        await deleteProductVariant(editingSlug, id)
+      }
+
+      // Create or update current variants
+      for (const variant of variants) {
+        const payload = {
+          size: (variant.size || '').trim(),
+          color: (variant.color || '').trim(),
+          stock: Number(variant.stock || 0),
+        }
+        // Skip completely empty rows
+        if (!payload.size && !payload.color) continue
+
+        if (variant.id) {
+          await updateProductVariant(editingSlug, variant.id, payload)
+        } else {
+          const res = await createProductVariant(editingSlug, payload)
+          variant.id = res.data?.id
+        }
+      }
+
+      toast.success('Variants saved')
+
+      // Refresh from backend to ensure consistency
+      const res = await getProduct(editingSlug)
+      const v = res.data?.variants || []
+      setVariants(
+        v.map((item) => ({
+          id: item.id,
+          size: item.size || '',
+          color: item.color || '',
+          stock: item.stock ?? 0,
+        })),
+      )
+      setInitialVariantIds(v.map((item) => item.id))
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Failed to save variants'
+      toast.error(msg)
     }
   }
 
@@ -719,57 +815,128 @@ export default function AdminProducts() {
           </div>
         </form>
 
-        {/* Image Management Section - Only show when editing */}
+        {/* Image & Variant Management Section - Only show when editing */}
         {editingSlug && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="font-semibold text-gray-800 mb-4">Product Images</h3>
-            
-            {/* Existing Images */}
-            {productImages.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
-                {productImages.map((img) => (
-                  <div key={img.id} className="relative group">
-                    <img
-                      src={img.image}
-                      alt="Product"
-                      className="w-full h-32 object-cover rounded-lg bg-gray-100"
-                    />
-                    <button
-                      onClick={() => handleImageDelete(img.id)}
-                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Delete image"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Upload New Image */}
+          <div className="mt-6 pt-6 border-t border-gray-200 space-y-8">
             <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Upload New Image
-              </label>
-              <div className="flex items-center gap-3">
-                <label className="flex-1 cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    disabled={uploadingImage}
-                    className="hidden"
-                  />
-                  <div className="px-4 py-2 border-2 border-dashed border-gray-300 rounded-xl text-center text-sm text-gray-600 hover:border-primary-400 hover:text-primary-600 transition-colors">
-                    {uploadingImage ? 'Uploading...' : 'Choose Image File'}
-                  </div>
+              <h3 className="font-semibold text-gray-800 mb-4">Product Images</h3>
+              {/* Existing Images */}
+              {productImages.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
+                  {productImages.map((img) => (
+                    <div key={img.id} className="relative group">
+                      <img
+                        src={img.image}
+                        alt="Product"
+                        className="w-full h-32 object-cover rounded-lg bg-gray-100"
+                      />
+                      <button
+                        onClick={() => handleImageDelete(img.id)}
+                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete image"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload New Image */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  Upload New Image
                 </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                      className="hidden"
+                    />
+                    <div className="px-4 py-2 border-2 border-dashed border-gray-300 rounded-xl text-center text-sm text-gray-600 hover:border-primary-400 hover:text-primary-600 transition-colors">
+                      {uploadingImage ? 'Uploading...' : 'Choose Image File'}
+                    </div>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Supported formats: JPG, PNG, GIF. Upload images after creating the product.
+                </p>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Supported formats: JPG, PNG, GIF. Upload images after creating the product.
-              </p>
+            </div>
+
+            {/* Variants Management */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-gray-800">Variants (size × color stock)</h3>
+                <button
+                  type="button"
+                  onClick={handleAddVariantRow}
+                  className="px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 text-xs font-medium"
+                >
+                  + Add Variant
+                </button>
+              </div>
+              {variants.length === 0 ? (
+                <p className="text-sm text-gray-500 mb-2">
+                  No variants yet. Add rows for each size/color with its own stock (e.g. S/blue = 10).
+                </p>
+              ) : (
+                <div className="space-y-2 mb-3">
+                  {variants.map((variant, index) => (
+                    <div key={variant.id ?? index} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-3">
+                        <input
+                          type="text"
+                          placeholder="Size"
+                          value={variant.size}
+                          onChange={(e) => handleVariantChange(index, 'size', e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="text"
+                          placeholder="Color"
+                          value={variant.color}
+                          onChange={(e) => handleVariantChange(index, 'color', e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Stock"
+                          value={variant.stock}
+                          onChange={(e) => handleVariantChange(index, 'stock', e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveVariantRow(index)}
+                          className="px-2 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveVariants}
+                className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-600 text-sm font-semibold"
+              >
+                Save Variants
+              </button>
             </div>
           </div>
         )}

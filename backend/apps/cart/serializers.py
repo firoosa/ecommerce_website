@@ -70,7 +70,7 @@ class AddToCartSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        from apps.products.models import Product
+        from apps.products.models import Product, ProductVariant
 
         product_id = attrs.get('product_id')
         selected_size = (attrs.get('selected_size') or '').strip()
@@ -80,8 +80,31 @@ class AddToCartSerializer(serializers.Serializer):
         if not product:
             raise serializers.ValidationError({'product_id': 'Product not found.'})
 
+        # Get available options from product fields
         available_sizes = _split_option_string(getattr(product, 'size', ''))
         available_colors = _split_option_string(getattr(product, 'color', ''))
+
+        # If product has variants, also get unique sizes/colors from variants
+        # This handles the case where product.size/color are empty but variants exist
+        variants_exist = ProductVariant.objects.filter(product=product).exists()
+        if variants_exist:
+            variant_sizes = set(
+                ProductVariant.objects.filter(product=product)
+                .exclude(size='')
+                .values_list('size', flat=True)
+                .distinct()
+            )
+            variant_colors = set(
+                ProductVariant.objects.filter(product=product)
+                .exclude(color='')
+                .values_list('color', flat=True)
+                .distinct()
+            )
+            # Merge with product fields (variants take precedence if product fields are empty)
+            if not available_sizes and variant_sizes:
+                available_sizes = sorted(variant_sizes)
+            if not available_colors and variant_colors:
+                available_colors = sorted(variant_colors)
 
         # If there's exactly one option, auto-select for backwards compatibility.
         if not selected_size and len(available_sizes) == 1:
@@ -100,6 +123,27 @@ class AddToCartSerializer(serializers.Serializer):
             raise serializers.ValidationError({'selected_size': 'Invalid size selection.'})
         if selected_color and available_colors and selected_color not in available_colors:
             raise serializers.ValidationError({'selected_color': 'Invalid color selection.'})
+
+        # If there are variants defined, ensure a matching variant exists.
+        size_key = (selected_size or '').strip()
+        color_key = (selected_color or '').strip()
+        if variants_exist:
+            variant = ProductVariant.objects.filter(
+                product=product,
+                size=size_key,
+                color=color_key,
+            ).first()
+            if not variant:
+                size_display = size_key or '(any)'
+                color_display = color_key or '(any)'
+                raise serializers.ValidationError(
+                    {
+                        'non_field_errors': [
+                            f'No variant found for Size: "{size_display}", Color: "{color_display}". '
+                            f'Please create this variant in the product admin or select a different combination.'
+                        ]
+                    }
+                )
 
         attrs['selected_size'] = selected_size
         attrs['selected_color'] = selected_color

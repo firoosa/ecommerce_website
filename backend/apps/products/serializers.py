@@ -3,7 +3,7 @@ Products app serializers.
 """
 
 from rest_framework import serializers
-from .models import Product, ProductImage
+from .models import Product, ProductImage, ProductVariant
 from apps.categories.serializers import CategoryListSerializer
 
 
@@ -57,6 +57,14 @@ class ProductImageSerializer(serializers.ModelSerializer):
             return rep
 
 
+class ProductVariantSerializer(serializers.ModelSerializer):
+    """Serializer for ProductVariant - mainly for admin / detailed views."""
+
+    class Meta:
+        model = ProductVariant
+        fields = ("id", "size", "color", "stock")
+
+
 class ProductListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for product lists."""
 
@@ -92,10 +100,32 @@ class ProductListSerializer(serializers.ModelSerializer):
         return None
 
     def get_available_sizes(self, obj):
-        return _split_option_string(getattr(obj, 'size', ''))
+        sizes = _split_option_string(getattr(obj, 'size', ''))
+        # If product.size is empty but variants exist, get sizes from variants
+        if not sizes:
+            variant_sizes = set(
+                ProductVariant.objects.filter(product=obj)
+                .exclude(size='')
+                .values_list('size', flat=True)
+                .distinct()
+            )
+            if variant_sizes:
+                sizes = sorted(variant_sizes)
+        return sizes
 
     def get_available_colors(self, obj):
-        return _split_option_string(getattr(obj, 'color', ''))
+        colors = _split_option_string(getattr(obj, 'color', ''))
+        # If product.color is empty but variants exist, get colors from variants
+        if not colors:
+            variant_colors = set(
+                ProductVariant.objects.filter(product=obj)
+                .exclude(color='')
+                .values_list('color', flat=True)
+                .distinct()
+            )
+            if variant_colors:
+                colors = sorted(variant_colors)
+        return colors
 
 
 class ProductDetailSerializer(serializers.ModelSerializer):
@@ -106,21 +136,44 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     effective_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     available_sizes = serializers.SerializerMethodField()
     available_colors = serializers.SerializerMethodField()
+    variants = ProductVariantSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
         fields = (
             'id', 'name', 'slug', 'description', 'price', 'discount_price', 'effective_price',
             'stock', 'brand', 'age_group', 'size', 'color', 'material', 'is_featured',
-            'available_sizes', 'available_colors',
+            'available_sizes', 'available_colors', 'variants',
             'category', 'images', 'is_active', 'created_at', 'updated_at'
         )
 
     def get_available_sizes(self, obj):
-        return _split_option_string(getattr(obj, 'size', ''))
+        sizes = _split_option_string(getattr(obj, 'size', ''))
+        # If product.size is empty but variants exist, get sizes from variants
+        if not sizes:
+            variant_sizes = set(
+                ProductVariant.objects.filter(product=obj)
+                .exclude(size='')
+                .values_list('size', flat=True)
+                .distinct()
+            )
+            if variant_sizes:
+                sizes = sorted(variant_sizes)
+        return sizes
 
     def get_available_colors(self, obj):
-        return _split_option_string(getattr(obj, 'color', ''))
+        colors = _split_option_string(getattr(obj, 'color', ''))
+        # If product.color is empty but variants exist, get colors from variants
+        if not colors:
+            variant_colors = set(
+                ProductVariant.objects.filter(product=obj)
+                .exclude(color='')
+                .values_list('color', flat=True)
+                .distinct()
+            )
+            if variant_colors:
+                colors = sorted(variant_colors)
+        return colors
 
 
 class ProductCreateUpdateSerializer(serializers.ModelSerializer):

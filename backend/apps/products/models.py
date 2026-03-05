@@ -52,6 +52,36 @@ class Product(models.Model):
         return self.discount_price if self.discount_price else self.price
 
 
+class ProductVariant(models.Model):
+    """
+    Concrete size/color variant for a product with its own stock.
+
+    Example:
+    - product = "bulk Products"
+    - size = "S"
+    - color = "red"
+    - stock = 10
+    """
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
+    size = models.CharField(max_length=50, blank=True)
+    color = models.CharField(max_length=50, blank=True)
+    stock = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'Product Variant'
+        verbose_name_plural = 'Product Variants'
+        unique_together = ('product', 'size', 'color')
+
+    def __str__(self):
+        parts = [self.product.name]
+        if self.color:
+            parts.append(self.color)
+        if self.size:
+            parts.append(self.size)
+        return " - ".join(parts)
+
+
 class ProductImage(models.Model):
     """Product image model."""
 

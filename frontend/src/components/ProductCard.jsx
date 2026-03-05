@@ -76,7 +76,7 @@ export default function ProductCard({ product }) {
             <span className="text-sm text-gray-400 line-through">₹{parseFloat(product.price).toFixed(2)}</span>
           )}
         </div>
-        {(sizes.length > 0 || colors.length > 0) && (
+        {/* {(sizes.length > 0 || colors.length > 0) && (
           <div className="mt-2 space-y-1">
             {sizes.length > 0 && (
               <div className="text-xs text-gray-500">
@@ -91,7 +91,7 @@ export default function ProductCard({ product }) {
               </div>
             )}
           </div>
-        )}
+        )} */}
         <button
           onClick={handleAddToCart}
           className="mt-3 w-full py-2.5 bg-primary-500 text-white rounded-xl hover:bg-pink-500 transition-soft font-medium text-sm flex items-center justify-center gap-2"

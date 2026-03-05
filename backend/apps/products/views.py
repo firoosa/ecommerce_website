@@ -2,18 +2,21 @@
 Products app views.
 """
 
-from rest_framework import generics
+from django.db.models import ProtectedError
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
-from .models import Product, ProductImage
+from .models import Product, ProductImage, ProductVariant
 from .serializers import (
     ProductListSerializer,
     ProductDetailSerializer,
     ProductCreateUpdateSerializer,
     ProductImageSerializer,
+    ProductVariantSerializer,
 )
 from .filters import ProductFilter
 
@@ -59,6 +62,24 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             return ProductCreateUpdateSerializer
         return ProductDetailSerializer
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Override default destroy to return a friendly error instead of 500
+        when the product is referenced by OrderItem via a protected FK.
+        """
+        instance = self.get_object()
+        try:
+            self.perform_destroy(instance)
+        except ProtectedError:
+            return Response(
+                {
+                    "detail": "Cannot delete this product because it is used in existing orders. "
+                              "You can mark it as inactive instead."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class ProductImageCreateView(generics.CreateAPIView):
     """Add image to product (Admin only)."""
@@ -79,3 +100,33 @@ class ProductImageDeleteView(generics.DestroyAPIView):
     def get_queryset(self):
         # Ensure we can only delete images that belong to the product in the URL
         return ProductImage.objects.filter(product__slug=self.kwargs['slug'])
+
+
+class ProductVariantListCreateView(generics.ListCreateAPIView):
+    """
+    List and create variants for a given product (Admin only).
+    """
+
+    serializer_class = ProductVariantSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        return ProductVariant.objects.filter(product__slug=self.kwargs['slug'])
+
+    def perform_create(self, serializer):
+        product = Product.objects.get(slug=self.kwargs['slug'])
+        serializer.save(product=product)
+
+
+class ProductVariantDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update, or delete a single variant for a product (Admin only).
+    """
+
+    serializer_class = ProductVariantSerializer
+    permission_classes = [IsAdminUser]
+    lookup_url_kwarg = 'variant_id'
+
+    def get_queryset(self):
+        # Limit to variants belonging to the product in the URL
+        return ProductVariant.objects.filter(product__slug=self.kwargs['slug'])

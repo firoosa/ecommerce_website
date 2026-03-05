@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Order, OrderItem
 from .serializers import OrderSerializer, CreateOrderSerializer
 from apps.cart.models import Cart, CartItem
+from apps.products.models import ProductVariant
 
 
 class OrderListCreateView(generics.ListCreateAPIView):
@@ -58,13 +59,49 @@ class OrderListCreateView(generics.ListCreateAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Validate stock before creating anything
+        # Validate stock before creating anything (variant-aware)
+        variant_cache = {}
         for cart_item in cart.items.select_related('product').all():
-            if cart_item.product.stock < cart_item.quantity:
-                return Response(
-                    {'error': f'Insufficient stock for {cart_item.product.name}. Available: {cart_item.product.stock}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            key = (
+                cart_item.product_id,
+                (cart_item.selected_size or '').strip(),
+                (cart_item.selected_color or '').strip(),
+            )
+            variant = None
+            if key not in variant_cache:
+                variant = ProductVariant.objects.filter(
+                    product_id=cart_item.product_id,
+                    size=key[1],
+                    color=key[2],
+                ).first()
+                variant_cache[key] = variant
+            else:
+                variant = variant_cache[key]
+
+            if variant:
+                if variant.stock < cart_item.quantity:
+                    return Response(
+                        {
+                            'error': (
+                                f'Insufficient stock for {cart_item.product.name} '
+                                f'({key[2] or "any color"} - {key[1] or "any size"}). '
+                                f'Available: {variant.stock}'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            else:
+                # Fallback to product-level stock
+                if cart_item.product.stock < cart_item.quantity:
+                    return Response(
+                        {
+                            'error': (
+                                f'Insufficient stock for {cart_item.product.name}. '
+                                f'Available: {cart_item.product.stock}'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
         # Create order
         order = Order.objects.create(
@@ -80,6 +117,12 @@ class OrderListCreateView(generics.ListCreateAPIView):
         for cart_item in cart.items.select_related('product').all():
             price = cart_item.product.effective_price
             quantity = cart_item.quantity
+            v_key = (
+                cart_item.product_id,
+                (cart_item.selected_size or '').strip(),
+                (cart_item.selected_color or '').strip(),
+            )
+            variant = variant_cache.get(v_key)
 
             OrderItem.objects.create(
                 order=order,
@@ -91,9 +134,13 @@ class OrderListCreateView(generics.ListCreateAPIView):
             )
             total += price * quantity
 
-            # Reduce stock
-            cart_item.product.stock -= quantity
-            cart_item.product.save(update_fields=['stock'])
+            # Reduce stock - prioritize variant stock if available
+            if variant:
+                variant.stock -= quantity
+                variant.save(update_fields=['stock'])
+            else:
+                cart_item.product.stock -= quantity
+                cart_item.product.save(update_fields=['stock'])
 
         order.total_amount = total + (total * Decimal(str(tax_rate)))
         order.save(update_fields=['total_amount'])
@@ -163,11 +210,20 @@ class OrderEditToCartView(generics.GenericAPIView):
             )
 
         with transaction.atomic():
-            # Restore stock
+            # Restore stock (variant-aware)
             for item in order.items.select_related('product').all():
-                product = item.product
-                product.stock += item.quantity
-                product.save(update_fields=['stock'])
+                size = (getattr(item, 'selected_size', '') or '').strip()
+                color = (getattr(item, 'selected_color', '') or '').strip()
+                variant = ProductVariant.objects.filter(
+                    product=item.product, size=size, color=color
+                ).first()
+                if variant:
+                    variant.stock += item.quantity
+                    variant.save(update_fields=['stock'])
+                else:
+                    product = item.product
+                    product.stock += item.quantity
+                    product.save(update_fields=['stock'])
 
             # Rebuild cart
             cart, _ = Cart.objects.get_or_create(user=request.user)

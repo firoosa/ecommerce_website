@@ -48,6 +48,14 @@ export const uploadProductImage = (slug, imageFile) => {
 export const deleteProductImage = (slug, imageId) =>
   api.delete(`/products/${slug}/images/${imageId}/`)
 
+// Product variants (Admin)
+export const createProductVariant = (slug, data) =>
+  api.post(`/products/${slug}/variants/`, data)
+export const updateProductVariant = (slug, variantId, data) =>
+  api.patch(`/products/${slug}/variants/${variantId}/`, data)
+export const deleteProductVariant = (slug, variantId) =>
+  api.delete(`/products/${slug}/variants/${variantId}/`)
+
 // Cart
 export const getCart = () => api.get('/cart/')
 export const addToCart = (productId, quantity = 1, options = {}) =>
