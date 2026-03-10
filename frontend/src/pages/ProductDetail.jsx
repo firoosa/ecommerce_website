@@ -7,6 +7,16 @@ import { setCart } from '../store/slices/cartSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
 import toast from 'react-hot-toast'
 
+const getApiErrorMessage = (err) => {
+  const data = err?.response?.data || {}
+  if (typeof data?.detail === 'string' && data.detail) return data.detail
+  if (typeof data?.error === 'string' && data.error) return data.error
+  if (Array.isArray(data?.non_field_errors) && data.non_field_errors[0]) return data.non_field_errors[0]
+  if (Array.isArray(data?.selected_size) && data.selected_size[0]) return data.selected_size[0]
+  if (Array.isArray(data?.selected_color) && data.selected_color[0]) return data.selected_color[0]
+  return ''
+}
+
 export default function ProductDetail() {
   const { slug } = useParams()
   const navigate = useNavigate()
@@ -27,8 +37,13 @@ export default function ProductDetail() {
     getProduct(slug)
       .then((res) => {
         setProduct(res.data)
-        const sizes = Array.isArray(res.data?.available_sizes) ? res.data.available_sizes : []
-        const colors = Array.isArray(res.data?.available_colors) ? res.data.available_colors : []
+        const variants = Array.isArray(res.data?.variants) ? res.data.variants : []
+        const sizes = variants.length
+          ? Array.from(new Set(variants.map((v) => v?.size).filter(Boolean)))
+          : (Array.isArray(res.data?.available_sizes) ? res.data.available_sizes : [])
+        const colors = variants.length
+          ? Array.from(new Set(variants.map((v) => v?.color).filter(Boolean)))
+          : (Array.isArray(res.data?.available_colors) ? res.data.available_colors : [])
         // Auto-select if there's exactly one option (helps older data and makes UX smoother)
         if (sizes.length === 1) setSelectedSize(sizes[0])
         if (colors.length === 1) setSelectedColor(colors[0])
@@ -47,15 +62,33 @@ export default function ProductDetail() {
       navigate('/login')
       return
     }
-    const sizes = Array.isArray(product?.available_sizes) ? product.available_sizes : []
-    const colors = Array.isArray(product?.available_colors) ? product.available_colors : []
-    if (sizes.length > 1 && !selectedSize) {
-      toast.error('Please select a size')
-      return
-    }
-    if (colors.length > 1 && !selectedColor) {
-      toast.error('Please select a color')
-      return
+    const variants = Array.isArray(product?.variants) ? product.variants : []
+    const sizes = variants.length
+      ? Array.from(new Set(variants.map((v) => v?.size).filter(Boolean)))
+      : (Array.isArray(product?.available_sizes) ? product.available_sizes : [])
+    const colors = variants.length
+      ? Array.from(new Set(variants.map((v) => v?.color).filter(Boolean)))
+      : (Array.isArray(product?.available_colors) ? product.available_colors : [])
+
+    // If variants exist, require selecting both size and color (when present)
+    if (variants.length > 0) {
+      if (sizes.length > 0 && !selectedSize) {
+        toast.error('Please select a size')
+        return
+      }
+      if (colors.length > 0 && !selectedColor) {
+        toast.error('Please select a color')
+        return
+      }
+    } else {
+      if (sizes.length > 1 && !selectedSize) {
+        toast.error('Please select a size')
+        return
+      }
+      if (colors.length > 1 && !selectedColor) {
+        toast.error('Please select a color')
+        return
+      }
     }
     try {
       await addToCart(product.id, quantity, {
@@ -66,8 +99,8 @@ export default function ProductDetail() {
       dispatch(setCart(data))
       toast.success('Added to cart!')
     } catch (err) {
-      const msg = err.response?.data?.detail || err.response?.data?.error
-      toast.error(msg || 'Please log in to add to cart')
+      const msg = getApiErrorMessage(err)
+      toast.error(msg || 'Failed to add to cart')
       if (err.response?.status === 401) navigate('/login')
     }
   }
@@ -109,8 +142,22 @@ export default function ProductDetail() {
   }
 
   const currentImage = images[currentImageIndex] || images[0]
-  const sizes = Array.isArray(product?.available_sizes) ? product.available_sizes : []
-  const colors = Array.isArray(product?.available_colors) ? product.available_colors : []
+  const variants = Array.isArray(product?.variants) ? product.variants : []
+  const sizes = variants.length
+    ? Array.from(new Set(variants.map((v) => v?.size).filter(Boolean))).sort()
+    : (Array.isArray(product?.available_sizes) ? product.available_sizes : [])
+  const colors = variants.length
+    ? Array.from(new Set(variants.map((v) => v?.color).filter(Boolean))).sort()
+    : (Array.isArray(product?.available_colors) ? product.available_colors : [])
+
+  const hasVariantCombos = variants.length > 0 && (sizes.length > 0 || colors.length > 0)
+  const isValidCombo = (size, color) =>
+    variants.some((v) => String(v?.size || '') === String(size || '') && String(v?.color || '') === String(color || ''))
+
+  const selectedVariant = hasVariantCombos && selectedSize && selectedColor
+    ? variants.find((v) => isValidCombo(selectedSize, selectedColor))
+    : null
+  const maxQty = selectedVariant?.stock ?? product.stock ?? 99
 
   const handlePrevImage = () => {
     if (!images.length) return
@@ -212,20 +259,32 @@ export default function ProductDetail() {
                 <div>
                   <p className="text-sm font-semibold text-gray-800 mb-2">Size</p>
                   <div className="flex flex-wrap gap-2">
-                    {sizes.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setSelectedSize(s)}
-                        className={`px-3 py-1.5 rounded-xl border text-sm transition-soft ${
-                          selectedSize === s
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                        }`}
-                      >
-                        {s}
-                      </button>
-                    ))}
+                    {sizes.map((s) => {
+                      const disabled = hasVariantCombos && selectedColor
+                        ? !isValidCombo(s, selectedColor)
+                        : false
+                      const isSelected = selectedSize === s
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            // Toggle selection on double click / second click
+                            setSelectedSize((prev) => (prev === s ? '' : s))
+                          }}
+                          className={`px-3 py-1.5 rounded-xl border text-sm transition-soft ${
+                            isSelected
+                              ? 'border-primary-500 bg-primary-50 text-primary-700'
+                              : disabled
+                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -233,20 +292,32 @@ export default function ProductDetail() {
                 <div>
                   <p className="text-sm font-semibold text-gray-800 mb-2">Color</p>
                   <div className="flex flex-wrap gap-2">
-                    {colors.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setSelectedColor(c)}
-                        className={`px-3 py-1.5 rounded-xl border text-sm transition-soft ${
-                          selectedColor === c
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                        }`}
-                      >
-                        {c}
-                      </button>
-                    ))}
+                    {colors.map((c) => {
+                      const disabled = hasVariantCombos && selectedSize
+                        ? !isValidCombo(selectedSize, c)
+                        : false
+                      const isSelected = selectedColor === c
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            // Toggle selection on double click / second click
+                            setSelectedColor((prev) => (prev === c ? '' : c))
+                          }}
+                          className={`px-3 py-1.5 rounded-xl border text-sm transition-soft ${
+                            isSelected
+                              ? 'border-primary-500 bg-primary-50 text-primary-700'
+                              : disabled
+                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -263,7 +334,7 @@ export default function ProductDetail() {
               </button>
               <span className="px-4 py-2 w-12 text-center font-medium">{quantity}</span>
               <button
-                onClick={() => setQuantity((q) => Math.min(product.stock || 99, q + 1))}
+                onClick={() => setQuantity((q) => Math.min(maxQty || 99, q + 1))}
                 className="px-4 py-2 bg-gray-50 hover:bg-gray-100"
               >
                 +

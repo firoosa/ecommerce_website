@@ -6,6 +6,16 @@ import { getCart } from '../api/services'
 import { setCart } from '../store/slices/cartSlice'
 import toast from 'react-hot-toast'
 
+const getApiErrorMessage = (err) => {
+  const data = err?.response?.data || {}
+  if (typeof data?.detail === 'string' && data.detail) return data.detail
+  if (typeof data?.error === 'string' && data.error) return data.error
+  if (Array.isArray(data?.non_field_errors) && data.non_field_errors[0]) return data.non_field_errors[0]
+  if (Array.isArray(data?.selected_size) && data.selected_size[0]) return data.selected_size[0]
+  if (Array.isArray(data?.selected_color) && data.selected_color[0]) return data.selected_color[0]
+  return ''
+}
+
 export default function ProductCard({ product }) {
   const dispatch = useDispatch()
   const navigate = useNavigate()
@@ -34,8 +44,8 @@ export default function ProductCard({ product }) {
       dispatch(setCart(data))
       toast.success('Added to cart!')
     } catch (err) {
-      const msg = err.response?.data?.detail || err.response?.data?.error
-      toast.error(msg || 'Please log in to add to cart')
+      const msg = getApiErrorMessage(err)
+      toast.error(msg || 'Failed to add to cart')
       if (err.response?.status === 401) navigate('/login')
     }
   }

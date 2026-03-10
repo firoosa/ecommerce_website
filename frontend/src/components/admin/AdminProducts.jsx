@@ -129,6 +129,15 @@ export default function AdminProducts() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
+      // Prepare variants array (filter out empty rows)
+      const variantsToSave = variants
+        .filter((v) => v.size.trim() || v.color.trim())
+        .map((v) => ({
+          size: v.size.trim(),
+          color: v.color.trim(),
+          stock: Number(v.stock) || 0,
+        }))
+
       const payload = {
         name: formData.name,
         description: formData.description,
@@ -143,6 +152,7 @@ export default function AdminProducts() {
         is_featured: formData.is_featured,
         category: formData.category || null,
         is_active: formData.is_active,
+        variants: variantsToSave,
       }
       let newSlug = editingSlug
       if (editingSlug) {
@@ -178,12 +188,34 @@ export default function AdminProducts() {
         if (newSlug) {
           setEditingSlug(newSlug)
           setCreateImages([])
-          // Fetch product details to get images (will be empty for new product)
+          // After product creation, create variants via dedicated API if needed
+          if (variantsToSave.length > 0) {
+            for (const v of variantsToSave) {
+              try {
+                await createProductVariant(newSlug, v)
+              } catch (err) {
+                console.error('Failed to create variant', v, err)
+              }
+            }
+          }
+          // Fetch product details to get images and variants
           try {
             const productRes = await getProduct(newSlug)
             setProductImages(productRes.data?.images || [])
+            const v = productRes.data?.variants || []
+            setVariants(
+              v.map((item) => ({
+                id: item.id,
+                size: item.size || '',
+                color: item.color || '',
+                stock: item.stock ?? 0,
+              })),
+            )
+            setInitialVariantIds(v.map((item) => item.id))
           } catch (err) {
             setProductImages([])
+            setVariants([])
+            setInitialVariantIds([])
           }
         }
       }
@@ -633,29 +665,7 @@ export default function AdminProducts() {
             </>
           )}
           
-          {/* Single Mode: Individual Color and Size */}
-          {!isBulkMode && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Size</label>
-                <input
-                  type="text"
-                  value={formData.size}
-                  onChange={(e) => setFormData({ ...formData, size: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">Color</label>
-                <input
-                  type="text"
-                  value={formData.color}
-                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-primary-500"
-                />
-              </div>
-            </>
-          )}
+          {/* Note: Size/Color are now managed via Variants section below */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
             <input
@@ -680,7 +690,9 @@ export default function AdminProducts() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Stock</label>
+            <label className="block text-sm font-medium text-gray-600 mb-1">
+              Stock {!isBulkMode && <span className="text-xs text-gray-500">(optional if using variants below)</span>}
+            </label>
             <input
               type="number"
               min="0"
@@ -789,6 +801,77 @@ export default function AdminProducts() {
               Active
             </label>
           </div>
+
+          {/* Variants Section - Show when creating or editing */}
+          {!isBulkMode && (
+            <div className="md:col-span-2 mt-4 pt-4 border-t border-gray-200">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-gray-800 text-sm">Product Variants (Size × Color × Stock)</h3>
+                <button
+                  type="button"
+                  onClick={handleAddVariantRow}
+                  className="px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 text-xs font-medium"
+                >
+                  + Add Variant
+                </button>
+              </div>
+              {variants.length === 0 ? (
+                <p className="text-sm text-gray-500 mb-2">
+                  No variants yet. Add rows for each size/color combination with its own stock (e.g. S/blue = 10).
+                </p>
+              ) : (
+                <div className="space-y-2 mb-3">
+                  {variants.map((variant, index) => (
+                    <div key={variant.id ?? index} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-3">
+                        <input
+                          type="text"
+                          placeholder="Size (e.g. S, M, L)"
+                          value={variant.size}
+                          onChange={(e) => handleVariantChange(index, 'size', e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="text"
+                          placeholder="Color (e.g. Red, Blue)"
+                          value={variant.color}
+                          onChange={(e) => handleVariantChange(index, 'color', e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Stock"
+                          value={variant.stock}
+                          onChange={(e) => handleVariantChange(index, 'stock', e.target.value)}
+                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveVariantRow(index)}
+                          className="px-2 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                {editingSlug
+                  ? 'Variants will be saved when you click "Save Changes" above.'
+                  : 'Variants will be created when you click "Create Product" above.'}
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-2 md:col-span-2 mt-2">
             <button
               type="submit"
@@ -869,75 +952,6 @@ export default function AdminProducts() {
               </div>
             </div>
 
-            {/* Variants Management */}
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="font-semibold text-gray-800">Variants (size × color stock)</h3>
-                <button
-                  type="button"
-                  onClick={handleAddVariantRow}
-                  className="px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 text-xs font-medium"
-                >
-                  + Add Variant
-                </button>
-              </div>
-              {variants.length === 0 ? (
-                <p className="text-sm text-gray-500 mb-2">
-                  No variants yet. Add rows for each size/color with its own stock (e.g. S/blue = 10).
-                </p>
-              ) : (
-                <div className="space-y-2 mb-3">
-                  {variants.map((variant, index) => (
-                    <div key={variant.id ?? index} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-3">
-                        <input
-                          type="text"
-                          placeholder="Size"
-                          value={variant.size}
-                          onChange={(e) => handleVariantChange(index, 'size', e.target.value)}
-                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <input
-                          type="text"
-                          placeholder="Color"
-                          value={variant.color}
-                          onChange={(e) => handleVariantChange(index, 'color', e.target.value)}
-                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="Stock"
-                          value={variant.stock}
-                          onChange={(e) => handleVariantChange(index, 'stock', e.target.value)}
-                          className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-3 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveVariantRow(index)}
-                          className="px-2 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={handleSaveVariants}
-                className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-600 text-sm font-semibold"
-              >
-                Save Variants
-              </button>
-            </div>
           </div>
         )}
       </div>

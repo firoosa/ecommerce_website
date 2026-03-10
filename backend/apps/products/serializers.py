@@ -178,31 +178,52 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
 class ProductCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating/updating products."""
+
     images = serializers.ListField(
         child=serializers.ImageField(),
         required=False,
         write_only=True,
     )
+    # Nested variant data when product is created/updated via JSON
+    variants = ProductVariantSerializer(many=True, required=False, write_only=True)
 
     class Meta:
         model = Product
         fields = (
             'name', 'slug', 'description', 'price', 'discount_price', 'stock',
             'brand', 'age_group', 'size', 'color', 'material', 'is_featured',
-            'category', 'is_active', 'images'
+            'category', 'is_active', 'images', 'variants'
         )
         extra_kwargs = {'slug': {'required': False}}
 
     def create(self, validated_data):
         images = validated_data.pop('images', [])
+        variants_data = validated_data.pop('variants', [])
         product = super().create(validated_data)
+
+        # Create images
         for img in images:
             ProductImage.objects.create(product=product, image=img)
+
+        # Create variants
+        for variant_data in variants_data:
+            ProductVariant.objects.create(product=product, **variant_data)
+
         return product
 
     def update(self, instance, validated_data):
         images = validated_data.pop('images', [])
+        variants_data = validated_data.pop('variants', None)
         product = super().update(instance, validated_data)
+
+        # Create images
         for img in images:
             ProductImage.objects.create(product=product, image=img)
+
+        # Update variants if provided
+        if variants_data is not None:
+            ProductVariant.objects.filter(product=product).delete()
+            for variant_data in variants_data:
+                ProductVariant.objects.create(product=product, **variant_data)
+
         return product
