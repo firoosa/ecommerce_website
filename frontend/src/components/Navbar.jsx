@@ -41,34 +41,49 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm shadow-soft border-b border-gray-100">
+    <nav className="sticky top-0 z-50 bg-[#fafaf5]/90 backdrop-blur-md border-b border-[#c2c7cf]/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <span className="text-2xl font-bold bg-gradient-to-r from-primary-500 to-pink-500 bg-clip-text text-transparent">
-              Baby Store
+            <span className="text-2xl tracking-tight text-[#1a1c19] font-serif">
+              Lumiere Enfance
             </span>
           </Link>
 
           {/* Categories Dropdown - Desktop */}
-          <div className="hidden md:block relative">
+          <div className="hidden lg:flex items-center gap-8 relative">
+            <Link to="/products" className="text-sm font-bold tracking-wide text-[#624000] border-b-2 border-[#624000] pb-1">
+              Shop All
+            </Link>
             <button
               onMouseEnter={() => setShowCategories(true)}
               onMouseLeave={() => setShowCategories(false)}
-              className="flex items-center gap-1 px-4 py-2 rounded-xl text-gray-600 hover:bg-primary-50 hover:text-primary-600 transition-soft"
+              className="flex items-center gap-1 text-sm font-medium tracking-wide text-[#42474e] hover:text-[#624000] transition-colors"
             >
               Categories <FiChevronDown className="text-sm" />
+            </button>
+            <button
+              onClick={() => navigate('/products?search=newborn')}
+              className="text-sm font-medium tracking-wide text-[#42474e] hover:text-[#624000] transition-colors"
+            >
+              Newborn
+            </button>
+            <button
+              onClick={() => navigate('/products?search=toddler')}
+              className="text-sm font-medium tracking-wide text-[#42474e] hover:text-[#624000] transition-colors"
+            >
+              Toddler
             </button>
             {showCategories && categories.length > 0 && (
               <div
                 onMouseEnter={() => setShowCategories(true)}
                 onMouseLeave={() => setShowCategories(false)}
-                className="absolute left-0 mt-1 w-56 bg-white rounded-2xl shadow-soft-lg py-2 border border-gray-100 animate-fade-in"
+                className="absolute left-28 top-8 w-56 bg-white rounded-xl shadow-soft-lg py-2 border border-gray-100 animate-fade-in"
               >
                 <Link
                   to="/products"
-                  className="block px-4 py-2 text-gray-600 hover:bg-pink-50 hover:text-pink-600 transition-soft"
+                  className="block px-4 py-2 text-[#42474e] hover:bg-[#f4f4ef] hover:text-[#624000] transition-soft"
                 >
                   All Products
                 </Link>
@@ -76,7 +91,7 @@ export default function Navbar() {
                   <Link
                     key={cat.id}
                     to={`/products?category=${cat.id}`}
-                    className="block px-4 py-2 text-gray-600 hover:bg-pink-50 hover:text-pink-600 transition-soft"
+                    className="block px-4 py-2 text-[#42474e] hover:bg-[#f4f4ef] hover:text-[#624000] transition-soft"
                   >
                     {cat.name}
                   </Link>
@@ -86,18 +101,18 @@ export default function Navbar() {
           </div>
 
           {/* Search Bar - Center */}
-          <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-xl mx-4">
+          <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-md mx-4">
             <div className="relative w-full">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search for baby products..."
-                className="w-full pl-4 pr-12 py-2.5 rounded-xl border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-soft"
+                className="w-full pl-4 pr-12 py-2.5 rounded-full bg-[#f4f4ef] border border-[#c2c7cf]/30 focus:border-[#624000] focus:ring-1 focus:ring-[#624000]/20 outline-none transition-soft text-sm"
               />
               <button
                 type="submit"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-primary-500 hover:bg-primary-50 rounded-lg transition-soft"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[#42474e] hover:text-[#624000] rounded-lg transition-soft"
               >
                 <FiSearch size={20} />
               </button>
@@ -108,11 +123,11 @@ export default function Navbar() {
           <div className="flex items-center gap-2">
             <Link
               to="/cart"
-              className="relative p-2.5 rounded-xl text-gray-600 hover:bg-pink-50 hover:text-pink-600 transition-soft"
+              className="relative p-2.5 rounded-xl text-[#42474e] hover:text-[#624000] transition-soft"
             >
               <FiShoppingCart size={24} />
               {count > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-pink-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 bg-[#624000] text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
                   {count > 99 ? '99+' : count}
                 </span>
               )}
@@ -124,7 +139,7 @@ export default function Navbar() {
                 <>
                   <button
                     onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-gray-600 hover:bg-primary-50 hover:text-primary-600 transition-soft"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-[#42474e] hover:bg-[#f4f4ef] hover:text-[#624000] transition-soft"
                   >
                     <FiUser size={20} />
                     <span className="max-w-[100px] truncate">{user?.full_name}</span>
@@ -135,7 +150,7 @@ export default function Navbar() {
                       <Link
                         to="/profile"
                         onClick={() => setShowUserMenu(false)}
-                        className="block px-4 py-2 text-gray-600 hover:bg-pink-50 hover:text-pink-600"
+                        className="block px-4 py-2 text-[#42474e] hover:bg-[#f4f4ef] hover:text-[#624000]"
                       >
                         Profile
                       </Link>
@@ -143,7 +158,7 @@ export default function Navbar() {
                         <Link
                           to="/admin"
                           onClick={() => setShowUserMenu(false)}
-                          className="block px-4 py-2 text-gray-600 hover:bg-pink-50 hover:text-pink-600"
+                          className="block px-4 py-2 text-[#42474e] hover:bg-[#f4f4ef] hover:text-[#624000]"
                         >
                           Admin Panel
                         </Link>
@@ -160,7 +175,7 @@ export default function Navbar() {
               ) : (
                 <Link
                   to="/login"
-                  className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-soft font-medium"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-[#624000] text-white rounded-xl hover:bg-[#4e3200] transition-soft font-medium"
                 >
                   <FiUser size={18} />
                   Login
@@ -171,7 +186,7 @@ export default function Navbar() {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl hover:bg-gray-100"
+              className="lg:hidden p-2 rounded-xl hover:bg-gray-100"
             >
               <FiMenu size={24} />
             </button>
@@ -180,7 +195,7 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-gray-100 animate-fade-in">
+          <div className="lg:hidden py-4 border-t border-gray-100 animate-fade-in">
             <form onSubmit={handleSearch} className="mb-4">
               <input
                 type="text"

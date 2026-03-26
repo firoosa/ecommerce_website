@@ -1,112 +1,438 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getCategories, getProducts } from '../api/services'
-import ProductCard from '../components/ProductCard'
 import LoadingSpinner from '../components/LoadingSpinner'
+import EmptyState from '../components/EmptyState'
+
+const normalize = (s) => (typeof s === 'string' ? s.toLowerCase() : '')
+const accent = '#7e5712'
+const accentDark = '#624000'
 
 export default function Home() {
   const [categories, setCategories] = useState([])
-  const [featuredProducts, setFeaturedProducts] = useState([])
+  const [products, setProducts] = useState([])
+  const [count, setCount] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12)
   const [loading, setLoading] = useState(true)
 
+  const [uiFilters, setUiFilters] = useState({
+    selectedAge: 'infant', // UI-only unless we find matching category keywords
+    selectedPalette: 'ivory',
+    // Category filter is shared for both "Age" + "Product Type" buttons.
+    categoryId: '',
+    maxPrice: 500,
+  })
+
+  const [filters, setFilters] = useState({
+    category: '',
+    min_price: '',
+    max_price: 500,
+    ordering: '-created_at',
+  })
+
   useEffect(() => {
-    Promise.all([
-      getCategories({ parent_only: true }),
-      // Load more products for home page (latest products)
-      getProducts({ page_size: 12 }),
-    ])
-      .then(([catRes, prodRes]) => {
-        const cats = catRes.data?.results || catRes.data || []
+    getCategories({ parent_only: true })
+      .then((res) => {
+        const cats = res.data?.results || res.data || []
         setCategories(Array.isArray(cats) ? cats : [])
-        setFeaturedProducts(prodRes.data?.results || prodRes.data || [])
+      })
+      .catch(() => setCategories([]))
+  }, [])
+
+  // Fetch products whenever filters/page changes.
+  useEffect(() => {
+    setLoading(true)
+
+    const params = {
+      ...filters,
+      page,
+    }
+
+    // Remove empty query params so DRF filters don't get invalid values.
+    Object.keys(params).forEach((k) => {
+      const v = params[k]
+      if (v === '' || v === null || typeof v === 'undefined') delete params[k]
+    })
+
+    getProducts(params)
+      .then((res) => {
+        const results = res.data?.results || res.data || []
+        setProducts(Array.isArray(results) ? results : [])
+        setCount(Number(res.data?.count ?? 0))
+        const inferredPageSize = Array.isArray(results) ? results.length : 12
+        if (inferredPageSize > 0) setPageSize(inferredPageSize)
       })
       .catch(() => {
-        setCategories([])
-        setFeaturedProducts([])
+        setProducts([])
+        setCount(0)
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [filters, page])
+
+  const totalPages = useMemo(() => {
+    if (!count || !pageSize) return 1
+    return Math.max(1, Math.ceil(count / pageSize))
+  }, [count, pageSize])
+
+  const visiblePages = useMemo(() => {
+    // Keep UI close to the template: show at most 4 page buttons.
+    const maxButtons = 4
+    const pages = []
+    const start = Math.max(1, page - 1)
+    const end = Math.min(totalPages, start + maxButtons - 1)
+    for (let p = start; p <= end; p += 1) pages.push(p)
+    return pages
+  }, [page, totalPages])
+
+  const findCategoryIdByKeywords = (keywords) => {
+    const match = categories.find((c) => {
+      const name = normalize(c?.name)
+      return keywords.some((kw) => name.includes(kw))
+    })
+    return match?.id ? String(match.id) : ''
+  }
+
+  // Apply the initial "Age" selection once categories are loaded,
+  // so the UI and results match.
+  useEffect(() => {
+    if (!categories.length) return
+    let keywords = []
+    if (uiFilters.selectedAge === 'newborn') keywords = ['newborn', '0-3', '0–3']
+    if (uiFilters.selectedAge === 'infant') keywords = ['infant', '3-12', '3–12']
+    if (uiFilters.selectedAge === 'toddler') keywords = ['toddler', '1-3', '1–3']
+
+    if (!keywords.length) return
+    const id = findCategoryIdByKeywords(keywords)
+    setUiFilters((f) => ({ ...f, categoryId: id }))
+    setFilters((cur) => ({ ...cur, category: id }))
+    setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories])
+
+  const applyCategoryByKeywords = (keywords) => {
+    const id = findCategoryIdByKeywords(keywords)
+    setUiFilters((f) => ({ ...f, categoryId: id }))
+    setFilters((cur) => ({
+      ...cur,
+      category: id,
+    }))
+    setPage(1)
+  }
+
+  const handleAgeClick = (ageKey) => {
+    setUiFilters((f) => ({ ...f, selectedAge: ageKey }))
+    // Try to map Age -> category based on keyword matching.
+    if (ageKey === 'newborn') applyCategoryByKeywords(['newborn', '0-3', '0–3'])
+    if (ageKey === 'infant') applyCategoryByKeywords(['infant', '3-12', '3–12'])
+    if (ageKey === 'toddler') applyCategoryByKeywords(['toddler', '1-3', '1–3'])
+  }
+
+  const handleProductTypeClick = (typeKey) => {
+    // Map "Product Type" buttons to categories using keyword matching.
+    if (typeKey === 'clothing') applyCategoryByKeywords(['clothing', 'romper', 'dress', 'shirt', 't-shirt', 'suit', 'socks'])
+    if (typeKey === 'furniture') applyCategoryByKeywords(['furniture', 'crib', 'bed', 'chair', 'table', 'dresser'])
+    if (typeKey === 'gear') applyCategoryByKeywords(['gear', 'carrier', 'stroller', 'diaper', 'bottle'])
+    if (typeKey === 'toys') applyCategoryByKeywords(['toy', 'stacker', 'puzzle', 'jenga', 'game'])
+  }
+
+  const setMaxPrice = (value) => {
+    setUiFilters((f) => ({ ...f, maxPrice: value }))
+    setFilters((cur) => ({
+      ...cur,
+      max_price: value,
+    }))
+    setPage(1)
+  }
 
   if (loading) return <LoadingSpinner size="lg" />
 
+  const getImage = (product) => product.primary_image || product.images?.[0]?.image || 'https://via.placeholder.com/600x750/f4f4ef/42474e?text=Baby+Product'
+  const getPrice = (product) => Number(product.effective_price || product.discount_price || product.price || 0)
+
   return (
-    <div>
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary-100 via-white to-pink-50">
-        <div className="max-w-7xl mx-auto px-4 py-16 md:py-24">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div className="animate-fade-in">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-800 leading-tight">
-                Welcome to <span className="bg-gradient-to-r from-primary-500 to-pink-500 bg-clip-text text-transparent">Baby Store</span>
-              </h1>
-              <p className="mt-4 text-lg text-gray-600">
-                Premium baby products for your little one. Soft, safe, and lovingly made.
-              </p>
-              <Link
-                to="/products"
-                className="inline-block mt-6 px-8 py-3.5 bg-primary-500 text-white rounded-xl hover:bg-pink-500 transition-soft font-semibold shadow-soft"
-              >
-                Shop Now
-              </Link>
-            </div>
-            <div className="hidden md:block">
-              <img
-                src="https://images.unsplash.com/photo-1519689680058-324335c77eba?w=600&h=400&fit=crop"
-                alt="Baby products"
-                className="rounded-2xl shadow-soft-lg w-full object-cover"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
+    <div className="bg-[#fafaf5] text-[#1a1c19]">
+      <main className="max-w-7xl mx-auto px-8 py-16">
+        {/* Breadcrumbs */}
+        <nav className="flex items-center space-x-2 text-[10px] tracking-[0.1em] uppercase font-bold mb-10 text-[#42474e]/50">
+          <Link to="/" className="hover:text-[#7e5712] transition-colors">
+            Home
+          </Link>
+          <span className="text-[#72777f]">›</span>
+          <span className="text-[#1a1c19]">Shop All</span>
+        </nav>
 
-      {/* Featured Categories */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-2xl font-bold text-gray-800 mb-8">Shop by Category</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {categories.slice(0, 8).map((cat) => (
-              <Link
-                key={cat.id}
-                to={`/products?category=${cat.id}`}
-                className="group block p-6 bg-gray-50 rounded-2xl hover:bg-primary-50 transition-soft border border-transparent hover:border-primary-200"
-              >
-                <div className="w-16 h-16 rounded-xl bg-white flex items-center justify-center mb-3 group-hover:scale-110 transition-soft">
-                  {cat.image ? (
-                    <img src={cat.image} alt={cat.name} className="w-12 h-12 object-contain" />
-                  ) : (
-                    <span className="text-2xl">👶</span>
-                  )}
+        {/* Category Header */}
+        <header className="mb-14 max-w-4xl">
+          <span className="text-[#7e5712] text-xs font-bold tracking-[0.3em] uppercase mb-5 block">
+            Essential Collections
+          </span>
+          <h1 className="text-5xl md:text-7xl font-serif italic tracking-tighter text-[#1a1c19] mb-8">
+            Curated Essentials
+          </h1>
+          <p className="text-xl text-[#42474e] leading-relaxed font-light max-w-2xl">
+            From organic pima cotton rompers to heirloom-quality nursery pieces, find everything you need
+            for your little one&apos;s first years.
+          </p>
+        </header>
+
+        <div className="flex flex-col lg:flex-row gap-10">
+          {/* Sidebar Filters */}
+          <aside className="w-full lg:w-72 flex-shrink-0">
+            <div className="sticky top-10 space-y-10">
+              <div className="space-y-8">
+                {/* Age Filter */}
+                <div>
+                  <h4 className="font-bold text-[10px] tracking-[0.2em] uppercase mb-6 text-[#1a1c19] border-l-2 pl-3" style={{ borderColor: accent }}>
+                    Age
+                  </h4>
+                  <ul className="space-y-4 text-sm text-[#42474e]">
+                    <li
+                      className="flex items-center gap-3 cursor-pointer hover:text-[#7e5712] transition-colors"
+                      onClick={() => handleAgeClick('newborn')}
+                    >
+                      <div className="w-4 h-4 border border-gray-300 rounded flex items-center justify-center">
+                        {uiFilters.selectedAge === 'newborn' && (
+                          <span className="text-[10px] text-white w-full h-full rounded flex items-center justify-center" style={{ backgroundColor: accentDark }}>
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <span>Newborn (0-3M)</span>
+                    </li>
+                    <li
+                      className="flex items-center gap-3 cursor-pointer transition-colors"
+                      onClick={() => handleAgeClick('infant')}
+                    >
+                      <div
+                        className={`w-4 h-4 border rounded flex items-center justify-center ${
+                          uiFilters.selectedAge === 'infant' ? '' : 'border-gray-300'
+                        }`}
+                        style={uiFilters.selectedAge === 'infant' ? { borderColor: accentDark, backgroundColor: accentDark } : undefined}
+                      >
+                        {uiFilters.selectedAge === 'infant' && <span className="text-[10px] text-white font-bold">✓</span>}
+                      </div>
+                      <span className={uiFilters.selectedAge === 'infant' ? 'text-[#7e5712]' : ''}>
+                        Infant (3-12M)
+                      </span>
+                    </li>
+                    <li
+                      className="flex items-center gap-3 cursor-pointer hover:text-[#7e5712] transition-colors"
+                      onClick={() => handleAgeClick('toddler')}
+                    >
+                      <div className="w-4 h-4 border border-gray-300 rounded flex items-center justify-center">
+                        {uiFilters.selectedAge === 'toddler' && (
+                          <span className="text-[10px] text-white w-full h-full rounded flex items-center justify-center" style={{ backgroundColor: accentDark }}>
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <span>Toddler (1-3Y)</span>
+                    </li>
+                  </ul>
                 </div>
-                <h3 className="font-semibold text-gray-800 group-hover:text-primary-600">{cat.name}</h3>
-              </Link>
-            ))}
-          </div>
-          {categories.length === 0 && (
-            <p className="text-gray-500 text-center py-8">No categories yet. Add some in the admin panel!</p>
-          )}
-        </div>
-      </section>
 
-      {/* Featured / Latest Products */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-800">Featured Products</h2>
-            <Link to="/products" className="text-primary-600 font-medium hover:text-pink-600">
-              View All →
-            </Link>
+                {/* Product Type Filter */}
+                <div>
+                  <h4 className="font-bold text-[10px] tracking-[0.2em] uppercase mb-6 text-[#1a1c19] border-l-2 pl-3" style={{ borderColor: accent }}>
+                    Product Type
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleProductTypeClick('clothing')}
+                      className="px-4 py-2 border text-white rounded-full text-[11px] font-bold tracking-wider shadow-sm transition-all"
+                      style={{ borderColor: accentDark, backgroundColor: accentDark }}
+                    >
+                      Clothing
+                    </button>
+                    <button
+                      onClick={() => handleProductTypeClick('furniture')}
+                      className="px-4 py-2 border border-gray-200 rounded-full text-[11px] font-bold tracking-wider hover:text-[#7e5712] transition-all"
+                    >
+                      Furniture
+                    </button>
+                    <button
+                      onClick={() => handleProductTypeClick('gear')}
+                      className="px-4 py-2 border border-gray-200 rounded-full text-[11px] font-bold tracking-wider hover:text-[#7e5712] transition-all"
+                    >
+                      Gear
+                    </button>
+                    <button
+                      onClick={() => handleProductTypeClick('toys')}
+                      className="px-4 py-2 border border-gray-200 rounded-full text-[11px] font-bold tracking-wider hover:text-[#7e5712] transition-all"
+                    >
+                      Toys
+                    </button>
+                  </div>
+                </div>
+
+                {/* Price Range */}
+                <div>
+                  <h4 className="font-bold text-[10px] tracking-[0.2em] uppercase mb-6 text-[#1a1c19] border-l-2 pl-3" style={{ borderColor: accent }}>
+                    Price Range
+                  </h4>
+                  <div className="px-1">
+                    <input
+                      className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      min="0"
+                      max="2000"
+                      step="10"
+                      type="range"
+                      value={filters.max_price}
+                      onChange={(e) => setMaxPrice(Number(e.target.value))}
+                    />
+                    <div className="flex justify-between mt-4">
+                      <div className="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 text-center flex-1 mr-2">
+                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Min</span>
+                        <span className="text-xs font-semibold text-gray-800">$0</span>
+                      </div>
+                      <div className="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 text-center flex-1 ml-2">
+                        <span className="text-[9px] text-gray-500 block uppercase font-bold">Max</span>
+                        <span className="text-xs font-semibold text-gray-800">
+                          ${filters.max_price >= 2000 ? '500+' : filters.max_price}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Palette Filter (UI only) */}
+                <div>
+                  <h4 className="font-bold text-[10px] tracking-[0.2em] uppercase mb-6 text-[#1a1c19] border-l-2 pl-3" style={{ borderColor: accent }}>
+                    Palette
+                  </h4>
+                  <div className="flex flex-wrap gap-3">
+                    {[
+                      { key: 'ivory', bg: '#FAF9F6' },
+                      { key: 'sand', bg: '#E5D3B3' },
+                      { key: 'ciel', bg: '#A2CFFE' },
+                      { key: 'rose', bg: '#7B5455' },
+                      { key: 'mist', bg: '#D8D5D1' },
+                    ].map((p) => (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setUiFilters((f) => ({ ...f, selectedPalette: p.key }))}
+                        className="w-7 h-7 rounded-full ring-offset-4 transition-all"
+                        style={{
+                          backgroundColor: p.bg,
+                          boxShadow:
+                            uiFilters.selectedPalette === p.key
+                              ? '0 0 0 2px rgba(98,64,0,1) inset'
+                              : undefined,
+                          border: uiFilters.selectedPalette === p.key ? 'none' : '1px solid rgba(0,0,0,0.08)',
+                        }}
+                        aria-label={`Palette ${p.key}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* Product Grid */}
+          <div className="flex-1">
+            <div className="flex justify-between items-end mb-10 pb-6 border-b border-[#c2c7cf]/35">
+              <div>
+                <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#42474e]/45">
+                  Filtered Results
+                </span>
+                <h2 className="text-2xl font-serif mt-1 text-[#1a1c19]">
+                  {count ? `Showing ${count} items` : `Showing ${products.length} items`}
+                </h2>
+              </div>
+              <div className="flex items-center space-x-3 text-xs font-bold tracking-widest text-[#1a1c19] uppercase cursor-pointer group">
+                <span>Sort by: Featured</span>
+              </div>
+            </div>
+
+            {products.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-12">
+                  {products.map((product) => (
+                    <div key={product.id} className="group flex flex-col h-full">
+                      <Link to={`/products/${product.slug}`} className="relative overflow-hidden rounded-xl aspect-[4/5] mb-5 bg-[#f4f4ef] block">
+                        <img
+                          src={getImage(product)}
+                          alt={product.name}
+                          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/600x750/f4f4ef/42474e?text=Baby+Product'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="absolute top-3 right-3 w-9 h-9 bg-white/95 rounded-full flex items-center justify-center text-[#624000] shadow-sm"
+                          aria-label="wishlist"
+                        >
+                          ♥
+                        </button>
+                      </Link>
+                      <div className="flex justify-between items-start mb-2">
+                        <p className="text-[9px] font-bold tracking-[0.2em] text-[#7e5712] uppercase">
+                          {categories.find((c) => String(c.id) === String(product.category))?.name || 'Essential Collection'}
+                        </p>
+                        <span className="text-[10px] font-bold text-[#624000]">★ 4.8</span>
+                      </div>
+                      <Link to={`/products/${product.slug}`} className="text-[34px] leading-tight text-[#1a1c19] font-serif mb-3 hover:opacity-80 transition-opacity">
+                        <span className="text-[34px] leading-tight">{product.name}</span>
+                      </Link>
+                      <div className="mt-auto flex justify-between items-center">
+                        <p className="text-3xl font-light text-[#42474e]">${getPrice(product).toFixed(2)}</p>
+                        <Link to={`/products/${product.slug}`} className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#624000] hover:underline">
+                          Add to Cart
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                <div className="mt-12 flex justify-center items-center space-x-6">
+                  <button
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="flex items-center space-x-3 text-[10px] font-bold tracking-[0.2em] uppercase text-[#42474e] hover:text-[#624000] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span>Previous</span>
+                  </button>
+
+                  <div className="flex space-x-6 text-sm font-bold">
+                    {visiblePages.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPage(p)}
+                        className={`uppercase border-b-2 pb-1 transition-colors ${
+                          p === page ? 'border-[#624000] text-[#624000]' : 'border-transparent text-[#72777f] hover:text-[#1a1c19]'
+                        }`}
+                      >
+                        {String(p).padStart(2, '0')}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="flex items-center space-x-3 text-[10px] font-bold tracking-[0.2em] uppercase text-[#42474e] hover:text-[#624000] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span>Next</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <EmptyState
+                title="No products found"
+                message="Try adjusting your filters."
+                actionLabel="View all products"
+                actionLink="/products"
+              />
+            )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-          {featuredProducts.length === 0 && (
-            <p className="text-gray-500 text-center py-12">No featured products yet.</p>
-          )}
         </div>
-      </section>
+      </main>
     </div>
   )
 }
