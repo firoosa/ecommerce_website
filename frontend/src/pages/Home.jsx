@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { getCategories, getProducts } from '../api/services'
+import { Link, useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
+import { addToWishlist, getCategories, getProducts, getWishlist, removeFromWishlist } from '../api/services'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
 
@@ -9,8 +10,11 @@ const accent = '#7e5712'
 const accentDark = '#624000'
 
 export default function Home() {
+  const navigate = useNavigate()
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
+  const [wishlistProductIds, setWishlistProductIds] = useState([])
+  const [wishlistLoadingId, setWishlistLoadingId] = useState(null)
   const [count, setCount] = useState(0)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
@@ -18,7 +22,7 @@ export default function Home() {
 
   const [uiFilters, setUiFilters] = useState({
     selectedAge: 'infant', // UI-only unless we find matching category keywords
-    selectedPalette: 'ivory',
+    selectedPalette: '',
     // Category filter is shared for both "Age" + "Product Type" buttons.
     categoryId: '',
     maxPrice: 500,
@@ -26,13 +30,14 @@ export default function Home() {
 
   const [filters, setFilters] = useState({
     category: '',
+    search: '',
     min_price: '',
     max_price: 500,
     ordering: '-created_at',
   })
 
   useEffect(() => {
-    getCategories({ parent_only: true })
+    getCategories()
       .then((res) => {
         const cats = res.data?.results || res.data || []
         setCategories(Array.isArray(cats) ? cats : [])
@@ -69,6 +74,24 @@ export default function Home() {
       })
       .finally(() => setLoading(false))
   }, [filters, page])
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    getWishlist()
+      .then((res) => {
+        const items = res.data?.items || []
+        const ids = items
+          .map((item) => item?.product?.id)
+          .filter((id) => Number.isFinite(Number(id)))
+          .map(Number)
+        setWishlistProductIds(ids)
+      })
+      .catch(() => {
+        setWishlistProductIds([])
+      })
+  }, [])
 
   const totalPages = useMemo(() => {
     if (!count || !pageSize) return 1
@@ -112,10 +135,13 @@ export default function Home() {
 
   const applyCategoryByKeywords = (keywords) => {
     const id = findCategoryIdByKeywords(keywords)
+    const fallbackSearch = keywords?.[0] || ''
     setUiFilters((f) => ({ ...f, categoryId: id }))
     setFilters((cur) => ({
       ...cur,
       category: id,
+      // Fallback: if category name matching fails, use keyword search so filter still works.
+      search: id ? '' : fallbackSearch,
     }))
     setPage(1)
   }
@@ -145,10 +171,79 @@ export default function Home() {
     setPage(1)
   }
 
+  const paletteKeywords = {
+    ivory: ['ivory', 'white', 'cream', 'off white', 'beige'],
+    sand: ['sand', 'tan', 'beige', 'khaki', 'brown'],
+    ciel: ['blue', 'sky', 'ciel', 'navy'],
+    rose: ['rose', 'pink', 'blush', 'maroon', 'red'],
+    mist: ['mist', 'gray', 'grey', 'silver', 'ash'],
+  }
+
+  const productMatchesPalette = (product, paletteKey) => {
+    if (!paletteKey) return true
+    const keywords = paletteKeywords[paletteKey] || []
+    if (!keywords.length) return true
+    const haystack = [
+      product?.color,
+      ...(Array.isArray(product?.available_colors) ? product.available_colors : []),
+      product?.name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    return keywords.some((kw) => haystack.includes(kw))
+  }
+
+  const getPrice = (product) => Number(product.effective_price || product.discount_price || product.price || 0)
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const priceOk = getPrice(product) <= Number(uiFilters.maxPrice || 0)
+      const paletteOk = productMatchesPalette(product, uiFilters.selectedPalette)
+      return priceOk && paletteOk
+    })
+  }, [products, uiFilters.maxPrice, uiFilters.selectedPalette])
+
+  const handleWishlistToggle = async (e, productId) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      toast.error('Please log in to use wishlist')
+      navigate('/login')
+      return
+    }
+
+    const numericProductId = Number(productId)
+    const isWishlisted = wishlistProductIds.includes(numericProductId)
+    setWishlistLoadingId(numericProductId)
+
+    try {
+      if (isWishlisted) {
+        await removeFromWishlist(numericProductId)
+        setWishlistProductIds((prev) => prev.filter((id) => id !== numericProductId))
+        toast.success('Removed from wishlist')
+      } else {
+        await addToWishlist(numericProductId)
+        setWishlistProductIds((prev) => (prev.includes(numericProductId) ? prev : [...prev, numericProductId]))
+        toast.success('Added to wishlist')
+      }
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        toast.error('Please log in to use wishlist')
+        navigate('/login')
+      } else {
+        toast.error('Failed to update wishlist')
+      }
+    } finally {
+      setWishlistLoadingId(null)
+    }
+  }
+
   if (loading) return <LoadingSpinner size="lg" />
 
   const getImage = (product) => product.primary_image || product.images?.[0]?.image || 'https://via.placeholder.com/600x750/f4f4ef/42474e?text=Baby+Product'
-  const getPrice = (product) => Number(product.effective_price || product.discount_price || product.price || 0)
 
   return (
     <div className="bg-[#fafaf5] text-[#1a1c19]">
@@ -312,7 +407,7 @@ export default function Home() {
                       <button
                         key={p.key}
                         type="button"
-                        onClick={() => setUiFilters((f) => ({ ...f, selectedPalette: p.key }))}
+                        onClick={() => setUiFilters((f) => ({ ...f, selectedPalette: f.selectedPalette === p.key ? '' : p.key }))}
                         className="w-7 h-7 rounded-full ring-offset-4 transition-all"
                         style={{
                           backgroundColor: p.bg,
@@ -339,7 +434,7 @@ export default function Home() {
                   Filtered Results
                 </span>
                 <h2 className="text-2xl font-serif mt-1 text-[#1a1c19]">
-                  {count ? `Showing ${count} items` : `Showing ${products.length} items`}
+                  {`Showing ${filteredProducts.length} items`}
                 </h2>
               </div>
               <div className="flex items-center space-x-3 text-xs font-bold tracking-widest text-[#1a1c19] uppercase cursor-pointer group">
@@ -347,10 +442,13 @@ export default function Home() {
               </div>
             </div>
 
-            {products.length > 0 ? (
+            {filteredProducts.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-12">
-                  {products.map((product) => (
+                  {filteredProducts.map((product) => {
+                    const isWishlisted = wishlistProductIds.includes(Number(product.id))
+                    const isLoading = wishlistLoadingId === Number(product.id)
+                    return (
                     <div key={product.id} className="group flex flex-col h-full">
                       <Link to={`/products/${product.slug}`} className="relative overflow-hidden rounded-xl aspect-[4/5] mb-5 bg-[#f4f4ef] block">
                         <img
@@ -363,8 +461,12 @@ export default function Home() {
                         />
                         <button
                           type="button"
-                          className="absolute top-3 right-3 w-9 h-9 bg-white/95 rounded-full flex items-center justify-center text-[#624000] shadow-sm"
+                          className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center shadow-sm transition-colors ${
+                            isWishlisted ? 'bg-[#624000] text-white' : 'bg-white/95 text-[#624000]'
+                          } ${isLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
                           aria-label="wishlist"
+                          onClick={(e) => handleWishlistToggle(e, product.id)}
+                          disabled={isLoading}
                         >
                           ♥
                         </button>
@@ -375,17 +477,18 @@ export default function Home() {
                         </p>
                         <span className="text-[10px] font-bold text-[#624000]">★ 4.8</span>
                       </div>
-                      <Link to={`/products/${product.slug}`} className="text-[34px] leading-tight text-[#1a1c19] font-serif mb-3 hover:opacity-80 transition-opacity">
-                        <span className="text-[34px] leading-tight">{product.name}</span>
+                      <Link to={`/products/${product.slug}`} className="text-2xl leading-snug text-[#1a1c19] font-serif mb-3 hover:opacity-80 transition-opacity">
+                        <span className="text-2xl leading-snug">{product.name}</span>
                       </Link>
                       <div className="mt-auto flex justify-between items-center">
-                        <p className="text-3xl font-light text-[#42474e]">${getPrice(product).toFixed(2)}</p>
+                        <p className="text-2xl font-medium text-[#42474e]">${getPrice(product).toFixed(2)}</p>
                         <Link to={`/products/${product.slug}`} className="text-[10px] font-bold tracking-[0.2em] uppercase text-[#624000] hover:underline">
                           Add to Cart
                         </Link>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
                 {/* Pagination */}

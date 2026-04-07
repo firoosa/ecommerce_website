@@ -1,30 +1,17 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
-import { FiSearch, FiShoppingCart, FiUser, FiChevronDown, FiMenu } from 'react-icons/fi'
+import { FiSearch, FiShoppingCart, FiUser, FiChevronDown, FiMenu, FiHeart } from 'react-icons/fi'
 import { logout } from '../store/slices/authSlice'
-import { getCategories } from '../api/services'
-import { useEffect } from 'react'
 
 export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState('')
-  const [categories, setCategories] = useState([])
-  const [showCategories, setShowCategories] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { isAuthenticated, user } = useSelector((state) => state.auth)
   const { count } = useSelector((state) => state.cart)
-
-  useEffect(() => {
-    getCategories({ parent_only: true })
-      .then((res) => {
-        const cats = res.data?.results || res.data || []
-        setCategories(Array.isArray(cats) ? cats : [])
-      })
-      .catch(() => setCategories([]))
-  }, [])
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -51,55 +38,6 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Categories Dropdown - Desktop */}
-          <div className="hidden lg:flex items-center gap-8 relative">
-            <Link to="/products" className="text-sm font-bold tracking-wide text-[#624000] border-b-2 border-[#624000] pb-1">
-              Shop All
-            </Link>
-            <button
-              onMouseEnter={() => setShowCategories(true)}
-              onMouseLeave={() => setShowCategories(false)}
-              className="flex items-center gap-1 text-sm font-medium tracking-wide text-[#42474e] hover:text-[#624000] transition-colors"
-            >
-              Categories <FiChevronDown className="text-sm" />
-            </button>
-            <button
-              onClick={() => navigate('/products?search=newborn')}
-              className="text-sm font-medium tracking-wide text-[#42474e] hover:text-[#624000] transition-colors"
-            >
-              Newborn
-            </button>
-            <button
-              onClick={() => navigate('/products?search=toddler')}
-              className="text-sm font-medium tracking-wide text-[#42474e] hover:text-[#624000] transition-colors"
-            >
-              Toddler
-            </button>
-            {showCategories && categories.length > 0 && (
-              <div
-                onMouseEnter={() => setShowCategories(true)}
-                onMouseLeave={() => setShowCategories(false)}
-                className="absolute left-28 top-8 w-56 bg-white rounded-xl shadow-soft-lg py-2 border border-gray-100 animate-fade-in"
-              >
-                <Link
-                  to="/products"
-                  className="block px-4 py-2 text-[#42474e] hover:bg-[#f4f4ef] hover:text-[#624000] transition-soft"
-                >
-                  All Products
-                </Link>
-                {categories.map((cat) => (
-                  <Link
-                    key={cat.id}
-                    to={`/products?category=${cat.id}`}
-                    className="block px-4 py-2 text-[#42474e] hover:bg-[#f4f4ef] hover:text-[#624000] transition-soft"
-                  >
-                    {cat.name}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Search Bar - Center */}
           <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-md mx-4">
             <div className="relative w-full">
@@ -121,6 +59,15 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            {isAuthenticated && (
+              <Link
+                to="/wishlist"
+                className="relative p-2.5 rounded-xl text-[#42474e] hover:text-[#624000] transition-soft"
+                title="Wishlist"
+              >
+                <FiHeart size={22} />
+              </Link>
+            )}
             <Link
               to="/cart"
               className="relative p-2.5 rounded-xl text-[#42474e] hover:text-[#624000] transition-soft"
@@ -214,6 +161,15 @@ export default function Navbar() {
               >
                 Shop Products
               </Link>
+              {isAuthenticated && (
+                <Link
+                  to="/wishlist"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2 text-gray-600"
+                >
+                  Wishlist
+                </Link>
+              )}
 
               {!isAuthenticated ? (
                 <>

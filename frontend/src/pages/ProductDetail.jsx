@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { FiShoppingCart, FiChevronLeft, FiChevronRight, FiChevronUp, FiChevronDown, FiTruck, FiCheck } from 'react-icons/fi'
-import { getProduct, getProducts, addToCart, getCart, createReview, getReviews } from '../api/services'
+import { FiShoppingCart, FiChevronLeft, FiChevronRight, FiChevronUp, FiChevronDown, FiTruck, FiCheck, FiHeart } from 'react-icons/fi'
+import { getProduct, getProducts, addToCart, getCart, createReview, getReviews, getWishlist, addToWishlist, removeFromWishlist } from '../api/services'
 import { useDispatch, useSelector } from 'react-redux'
 import { setCart } from '../store/slices/cartSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -33,6 +33,10 @@ export default function ProductDetail() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [relatedProducts, setRelatedProducts] = useState([])
   const [adding, setAdding] = useState(false)
+  const [wishlisted, setWishlisted] = useState(false)
+  const [wishlistLoading, setWishlistLoading] = useState(false)
+  const [wishlistProductIds, setWishlistProductIds] = useState([])
+  const [relatedWishlistLoadingId, setRelatedWishlistLoadingId] = useState(null)
   const [materialsExpanded, setMaterialsExpanded] = useState(false)
   const dispatch = useDispatch()
   const { isAuthenticated } = useSelector((state) => state.auth)
@@ -73,6 +77,30 @@ export default function ProductDetail() {
       .catch(() => setProduct(null))
       .finally(() => setLoading(false))
   }, [slug])
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    if (!token || !product?.id) {
+      setWishlisted(false)
+      return
+    }
+
+    getWishlist()
+      .then((res) => {
+        const items = Array.isArray(res.data?.items) ? res.data.items : []
+        const exists = items.some((item) => Number(item?.product?.id) === Number(product.id))
+        const ids = items
+          .map((item) => item?.product?.id)
+          .filter((id) => Number.isFinite(Number(id)))
+          .map(Number)
+        setWishlisted(exists)
+        setWishlistProductIds(ids)
+      })
+      .catch(() => {
+        setWishlisted(false)
+        setWishlistProductIds([])
+      })
+  }, [product?.id])
 
   const handleAddToCart = async () => {
     const token = localStorage.getItem('access_token')
@@ -148,6 +176,72 @@ export default function ProductDetail() {
       toast.error(err.response?.data?.detail || err.response?.data?.product?.[0] || 'Failed to submit review')
     } finally {
       setSubmittingReview(false)
+    }
+  }
+
+  const handleWishlistToggle = async () => {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      toast.error('Please log in to use wishlist')
+      navigate('/login')
+      return
+    }
+    if (!product?.id) return
+
+    setWishlistLoading(true)
+    try {
+      if (wishlisted) {
+        await removeFromWishlist(product.id)
+        setWishlisted(false)
+        setWishlistProductIds((prev) => prev.filter((id) => id !== Number(product.id)))
+        toast.success('Removed from wishlist')
+      } else {
+        await addToWishlist(product.id)
+        setWishlisted(true)
+        setWishlistProductIds((prev) => (prev.includes(Number(product.id)) ? prev : [...prev, Number(product.id)]))
+        toast.success('Added to wishlist')
+      }
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        navigate('/login')
+      } else {
+        toast.error('Failed to update wishlist')
+      }
+    } finally {
+      setWishlistLoading(false)
+    }
+  }
+
+  const handleRelatedWishlistToggle = async (relatedProduct) => {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      toast.error('Please log in to use wishlist')
+      navigate('/login')
+      return
+    }
+    const productId = Number(relatedProduct?.id)
+    if (!productId) return
+
+    setRelatedWishlistLoadingId(productId)
+    const isRelatedWishlisted = wishlistProductIds.includes(productId)
+    try {
+      if (isRelatedWishlisted) {
+        await removeFromWishlist(productId)
+        setWishlistProductIds((prev) => prev.filter((id) => id !== productId))
+        toast.success('Removed from wishlist')
+      } else {
+        await addToWishlist(productId)
+        setWishlistProductIds((prev) => (prev.includes(productId) ? prev : [...prev, productId]))
+        toast.success('Added to wishlist')
+      }
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        navigate('/login')
+      } else {
+        toast.error('Failed to update wishlist')
+      }
+    } finally {
+      setRelatedWishlistLoadingId(null)
     }
   }
 
@@ -287,7 +381,23 @@ export default function ProductDetail() {
         <div className="flex flex-col">
           {/* Title with Rating */}
           <div className="mb-4">
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">{product.name}</h1>
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">{product.name}</h1>
+              <button
+                type="button"
+                onClick={handleWishlistToggle}
+                disabled={wishlistLoading}
+                className={`w-11 h-11 rounded-full border flex items-center justify-center transition ${
+                  wishlisted
+                    ? 'bg-[#624000] text-white border-[#624000]'
+                    : 'bg-white text-[#624000] border-[#624000]'
+                } ${wishlistLoading ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#624000] hover:text-white'}`}
+                aria-label="Toggle wishlist"
+                title="Wishlist"
+              >
+                <FiHeart size={20} />
+              </button>
+            </div>
             <div className="flex items-center gap-4 flex-wrap">
               {avgRating && (
                 <div className="flex items-center gap-2">
@@ -318,11 +428,11 @@ export default function ProductDetail() {
 
           {/* Price */}
           <div className="mb-6">
-            <span className="text-3xl md:text-4xl font-bold text-gray-900">
+            <span className="text-2xl md:text-3xl font-bold text-gray-900">
               ₹{parseFloat(price).toFixed(2)}
             </span>
             {hasDiscount && (
-              <span className="ml-3 text-lg text-gray-400 line-through">
+              <span className="ml-3 text-base text-gray-400 line-through">
                 ₹{parseFloat(product.price).toFixed(2)}
               </span>
             )}
@@ -577,7 +687,15 @@ export default function ProductDetail() {
           <h2 className="text-xl font-bold text-gray-800 mb-4">You May Also Like</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {relatedProducts.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard
+                key={p.id}
+                product={p}
+                showSaleBadge={false}
+                showWishlistIcon
+                isWishlisted={wishlistProductIds.includes(Number(p.id))}
+                wishlistLoading={relatedWishlistLoadingId === Number(p.id)}
+                onToggleWishlist={handleRelatedWishlistToggle}
+              />
             ))}
           </div>
         </section>

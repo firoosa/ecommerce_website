@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { getProducts, getCategories } from '../api/services'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import toast from 'react-hot-toast'
+import { getProducts, getCategories, getWishlist, addToWishlist, removeFromWishlist } from '../api/services'
 import ProductCard from '../components/ProductCard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
 
 export default function Products() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
+  const [wishlistProductIds, setWishlistProductIds] = useState([])
+  const [wishlistLoadingId, setWishlistLoadingId] = useState(null)
   const [filters, setFilters] = useState({
     search: searchParams.get('search') || '',
     category: searchParams.get('category') || '',
@@ -37,8 +41,57 @@ export default function Products() {
       .finally(() => setLoading(false))
   }, [filters])
 
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+
+    getWishlist()
+      .then((res) => {
+        const items = Array.isArray(res.data?.items) ? res.data.items : []
+        const ids = items
+          .map((item) => item?.product?.id)
+          .filter((id) => Number.isFinite(Number(id)))
+          .map(Number)
+        setWishlistProductIds(ids)
+      })
+      .catch(() => setWishlistProductIds([]))
+  }, [])
+
   const handleFilterChange = (key, value) => {
     setFilters((f) => ({ ...f, [key]: value }))
+  }
+
+  const handleWishlistToggle = async (product) => {
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      toast.error('Please log in to use wishlist')
+      navigate('/login')
+      return
+    }
+    const productId = Number(product?.id)
+    if (!productId) return
+
+    const isWishlisted = wishlistProductIds.includes(productId)
+    setWishlistLoadingId(productId)
+    try {
+      if (isWishlisted) {
+        await removeFromWishlist(productId)
+        setWishlistProductIds((prev) => prev.filter((id) => id !== productId))
+        toast.success('Removed from wishlist')
+      } else {
+        await addToWishlist(productId)
+        setWishlistProductIds((prev) => (prev.includes(productId) ? prev : [...prev, productId]))
+        toast.success('Added to wishlist')
+      }
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        navigate('/login')
+      } else {
+        toast.error('Failed to update wishlist')
+      }
+    } finally {
+      setWishlistLoadingId(null)
+    }
   }
 
   return (
@@ -97,7 +150,15 @@ export default function Products() {
           ) : products.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
               {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  showSaleBadge={false}
+                  showWishlistIcon
+                  isWishlisted={wishlistProductIds.includes(Number(product.id))}
+                  wishlistLoading={wishlistLoadingId === Number(product.id)}
+                  onToggleWishlist={handleWishlistToggle}
+                />
               ))}
             </div>
           ) : (

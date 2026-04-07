@@ -11,6 +11,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
+import Wishlist from './pages/Wishlist'
 import { rehydrateAuth } from './store/slices/authSlice'
 
 // Protected route wrapper
@@ -45,6 +46,14 @@ function App() {
         <Route path="products" element={<Products />} />
         <Route path="products/:slug" element={<ProductDetail />} />
         <Route path="cart" element={<Cart />} />
+        <Route
+          path="wishlist"
+          element={
+            <ProtectedRoute>
+              <Wishlist />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="checkout"
           element={
