@@ -39,7 +39,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         """
-        Return absolute URL for image while still allowing uploads via the 'image' field.
+        Return relative media URL so frontend host decides correct domain/IP.
         """
         rep = super().to_representation(instance)
         try:
@@ -48,8 +48,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
                 return rep
 
             url = instance.image.url
-            request = self.context.get('request')
-            rep['image'] = request.build_absolute_uri(url) if request else url
+            rep['image'] = url
             return rep
         except ValueError:
             # Handles: "The 'image' attribute has no file associated with it."
@@ -90,9 +89,6 @@ class ProductListSerializer(serializers.ModelSerializer):
             if not img.image or not getattr(img.image, 'name', None):
                 continue
             try:
-                request = self.context.get('request')
-                if request:
-                    return request.build_absolute_uri(img.image.url)
                 return img.image.url
             except ValueError:
                 # Skip invalid/missing file references

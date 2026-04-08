@@ -73,7 +73,7 @@ export default function Checkout() {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 text-center">
         <p className="text-gray-600">Your cart is empty.</p>
-        <button onClick={() => navigate('/products')} className="mt-4 text-primary-600 font-medium">
+        <button onClick={() => navigate('/products')} className="mt-4 text-[#624000] font-medium hover:text-[#7e5712]">
           Continue Shopping
         </button>
       </div>
@@ -111,7 +111,7 @@ export default function Checkout() {
           {!showNewAddress ? (
             <button
               onClick={() => setShowNewAddress(true)}
-              className="text-primary-600 font-medium hover:text-pink-600"
+              className="text-[#624000] font-medium hover:text-[#7e5712]"
             >
               + Add new address
             </button>
@@ -152,7 +152,7 @@ export default function Checkout() {
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-primary-500"
               />
               <div className="flex gap-2">
-                <button type="submit" className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-600">
+                <button type="submit" className="px-4 py-2 bg-[#624000] text-white rounded-xl hover:bg-[#7e5712]">
                   Save Address
                 </button>
                 <button type="button" onClick={() => setShowNewAddress(false)} className="px-4 py-2 text-gray-600">
@@ -189,13 +189,13 @@ export default function Checkout() {
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="flex justify-between font-bold text-lg">
                 <span>Total</span>
-                <span className="text-primary-600">₹{parseFloat(total).toFixed(2)}</span>
+                <span className="text-[#624000]">₹{parseFloat(total).toFixed(2)}</span>
               </div>
             </div>
             <button
               onClick={handlePlaceOrder}
               disabled={placing || !(selectedAddress || addresses[0]?.id)}
-              className="mt-6 w-full py-3.5 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition-soft font-semibold disabled:opacity-50"
+              className="mt-6 w-full py-3.5 bg-[#624000] text-white rounded-xl hover:bg-[#7e5712] transition-soft font-semibold disabled:opacity-50"
             >
               {placing ? 'Placing Order...' : 'Place Order'}
             </button>

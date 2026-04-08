@@ -58,56 +58,61 @@ export default function Cart() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Shopping Cart</h1>
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
             <div className="divide-y divide-gray-100">
               {items.map((item) => (
-                <div key={item.id} className="flex gap-4 p-4">
-                  <img
-                    src={item.product?.primary_image || item.product?.images?.[0]?.image}
-                    alt={item.product?.name}
-                    className="w-24 h-24 rounded-xl object-cover bg-gray-50"
-                    onError={(e) => {
-                      e.target.src = 'https://via.placeholder.com/96'
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <Link to={`/products/${item.product?.slug}`} className="font-medium text-gray-800 hover:text-primary-600">
-                      {item.product?.name}
-                    </Link>
-                    {(item.selected_size || item.selected_color) && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {item.selected_size ? `Size: ${item.selected_size}` : ''}
-                        {item.selected_size && item.selected_color ? ' • ' : ''}
-                        {item.selected_color ? `Color: ${item.selected_color}` : ''}
-                      </p>
-                    )}
-                    <p className="text-primary-600 font-semibold mt-1">₹{parseFloat(item.line_total || 0).toFixed(2)}</p>
+                <div key={item.id} className="p-4">
+                  <div className="flex gap-3 sm:gap-4">
+                    <img
+                      src={item.product?.primary_image || item.product?.images?.[0]?.image}
+                      alt={item.product?.name}
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover bg-gray-50 flex-shrink-0"
+                      onError={(e) => {
+                        e.target.src = 'https://via.placeholder.com/96'
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Link to={`/products/${item.product?.slug}`} className="font-medium text-gray-800 hover:text-[#624000] line-clamp-2">
+                        {item.product?.name}
+                      </Link>
+                      {(item.selected_size || item.selected_color) && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {item.selected_size ? `Size: ${item.selected_size}` : ''}
+                          {item.selected_size && item.selected_color ? ' • ' : ''}
+                          {item.selected_color ? `Color: ${item.selected_color}` : ''}
+                        </p>
+                      )}
+                      <p className="text-[#624000] font-semibold mt-1">₹{parseFloat(item.line_total || 0).toFixed(2)}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleUpdateQty(item.id, Math.max(1, item.quantity - 1))}
+                        className="w-9 h-9 rounded-lg border border-gray-200 hover:bg-gray-50"
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center font-medium">{item.quantity}</span>
+                      <button
+                        onClick={() => handleUpdateQty(item.id, item.quantity + 1)}
+                        className="w-9 h-9 rounded-lg border border-gray-200 hover:bg-gray-50"
+                      >
+                        +
+                      </button>
+                    </div>
                     <button
-                      onClick={() => handleUpdateQty(item.id, Math.max(1, item.quantity - 1))}
-                      className="w-8 h-8 rounded-lg border border-gray-200 hover:bg-gray-50"
+                      onClick={() => handleRemove(item.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
                     >
-                      -
-                    </button>
-                    <span className="w-8 text-center font-medium">{item.quantity}</span>
-                    <button
-                      onClick={() => handleUpdateQty(item.id, item.quantity + 1)}
-                      className="w-8 h-8 rounded-lg border border-gray-200 hover:bg-gray-50"
-                    >
-                      +
+                      <FiTrash2 size={18} />
                     </button>
                   </div>
-                  <button
-                    onClick={() => handleRemove(item.id)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                  >
-                    <FiTrash2 size={18} />
-                  </button>
                 </div>
               ))}
             </div>
@@ -132,7 +137,7 @@ export default function Cart() {
             </div>
             <Link
               to="/checkout"
-              className="mt-6 block w-full py-3.5 bg-pink-500 text-white text-center rounded-xl hover:bg-pink-600 transition-soft font-semibold"
+              className="mt-6 block w-full py-3.5 bg-[#624000] text-white text-center rounded-xl hover:bg-[#7e5712] transition-soft font-semibold"
             >
               Proceed to Checkout
             </Link>

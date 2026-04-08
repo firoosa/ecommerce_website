@@ -480,7 +480,7 @@ export default function ProductDetail() {
                       }}
                       className={`relative w-12 h-12 rounded-full border-2 transition-all ${
                         isSelected
-                          ? 'border-blue-600 ring-2 ring-blue-200'
+                          ? 'border-[#624000] ring-2 ring-[#e8dfcf]'
                           : disabled
                             ? 'border-gray-300 opacity-40 cursor-not-allowed'
                             : 'border-gray-300 hover:border-gray-400'
@@ -507,7 +507,7 @@ export default function ProductDetail() {
                 <p className="text-sm font-semibold text-gray-800">SELECT SIZE</p>
                 <button
                   type="button"
-                  className="text-sm text-blue-600 hover:text-blue-700 underline"
+                  className="text-sm text-[#624000] hover:text-[#7e5712] underline"
                   onClick={() => {
                     // You can add a size guide modal or navigate to a size guide page
                     toast.info('Size guide coming soon!')
@@ -532,7 +532,7 @@ export default function ProductDetail() {
                       }}
                       className={`px-5 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
                         isSelected
-                          ? 'border-blue-600 bg-blue-50 text-blue-700'
+                          ? 'border-[#624000] bg-[#f6f2e9] text-[#624000]'
                           : disabled
                             ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
                             : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
@@ -570,7 +570,7 @@ export default function ProductDetail() {
             <button
               onClick={handleAddToCart}
               disabled={adding}
-              className="w-full flex items-center justify-center gap-2 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold text-base shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 py-4 bg-[#624000] text-white rounded-lg hover:bg-[#7e5712] transition-all font-semibold text-base shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FiShoppingCart size={20} />
               {adding ? 'Adding...' : 'Add to Basket'}
