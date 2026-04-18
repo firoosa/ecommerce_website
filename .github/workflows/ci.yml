@@ -9,7 +9,9 @@ on:
       - main
 
 jobs:
-  check:
+
+  backend-check:
+    name: Backend - Django
     runs-on: ubuntu-latest
 
     steps:
@@ -23,18 +25,46 @@ jobs:
 
       - name: Install dependencies
         run: |
+          cd backend
           pip install -r requirements.txt
 
-      - name: Check Django
+      - name: Run Django check
+        run: |
+          cd backend
+          python manage.py check
         env:
           SECRET_KEY: test-secret-key
           DEBUG: 'True'
-        run: |
-          python manage.py check
+          DJANGO_SETTINGS_MODULE: baby_shop.settings
 
       - name: Run tests
+        run: |
+          cd backend
+          python manage.py test
         env:
           SECRET_KEY: test-secret-key
           DEBUG: 'True'
+          DJANGO_SETTINGS_MODULE: baby_shop.settings
+
+  frontend-check:
+    name: Frontend - React Vite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
         run: |
-          python manage.py test
+          cd frontend
+          npm install
+
+      - name: Build React app
+        run: |
+          cd frontend
+          npm run build
