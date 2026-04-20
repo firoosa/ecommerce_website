@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
-import { FiSearch, FiShoppingCart, FiUser, FiChevronDown, FiMenu, FiHeart } from 'react-icons/fi'
+import { FiSearch, FiUser, FiChevronDown, FiMenu } from 'react-icons/fi'
 import { logout } from '../store/slices/authSlice'
 
 export default function Navbar() {
@@ -11,7 +11,6 @@ export default function Navbar() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { isAuthenticated, user } = useSelector((state) => state.auth)
-  const { count } = useSelector((state) => state.cart)
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -59,27 +58,6 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
-            {isAuthenticated && (
-              <Link
-                to="/wishlist"
-                className="relative p-2.5 rounded-xl text-[#42474e] hover:text-[#624000] transition-soft"
-                title="Wishlist"
-              >
-                <FiHeart size={22} />
-              </Link>
-            )}
-            <Link
-              to="/cart"
-              className="relative p-2.5 rounded-xl text-[#42474e] hover:text-[#624000] transition-soft"
-            >
-              <FiShoppingCart size={24} />
-              {count > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-[#624000] text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                  {count > 99 ? '99+' : count}
-                </span>
-              )}
-            </Link>
-
             {/* User Menu */}
             <div className="relative hidden md:block">
               {isAuthenticated ? (
@@ -161,16 +139,6 @@ export default function Navbar() {
               >
                 Shop Products
               </Link>
-              {isAuthenticated && (
-                <Link
-                  to="/wishlist"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-gray-600"
-                >
-                  Wishlist
-                </Link>
-              )}
-
               {!isAuthenticated ? (
                 <>
                   <Link
