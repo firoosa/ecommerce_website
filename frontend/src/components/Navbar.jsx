@@ -31,8 +31,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
-            <span className="text-2xl tracking-tight text-[#1a1c19] font-serif">
+          <Link to="/" className="flex items-center gap-2 max-w-[70vw] sm:max-w-none">
+            <span className="text-lg sm:text-xl md:text-2xl tracking-tight text-[#1a1c19] font-serif truncate">
               Lumiere Enfance
             </span>
           </Link>
@@ -111,7 +111,7 @@ export default function Navbar() {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-xl hover:bg-gray-100"
+              className="md:hidden p-2 rounded-xl hover:bg-gray-100"
             >
               <FiMenu size={24} />
             </button>
@@ -120,7 +120,7 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="lg:hidden py-4 border-t border-gray-100 animate-fade-in">
+          <div className="md:hidden py-4 border-t border-gray-100 animate-fade-in">
             <form onSubmit={handleSearch} className="mb-4">
               <input
                 type="text"

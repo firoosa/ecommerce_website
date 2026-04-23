@@ -4,7 +4,7 @@ import { FiGlobe, FiAtSign, FiCamera } from 'react-icons/fi'
 export default function Footer() {
   return (
     <footer className="bg-[#f4f4ef] border-t border-[#c2c7cf]/30 mt-auto">
-      <div className="max-w-7xl mx-auto px-8 py-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-12 md:py-16">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="md:col-span-1">
             <Link to="/" className="text-2xl font-serif text-[#624000] italic">
@@ -55,13 +55,13 @@ export default function Footer() {
             <p className="text-xs text-[#42474e] mb-4">
               Early access to new drops and editorial inspiration.
             </p>
-            <div className="flex">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-0">
               <input
                 type="email"
                 placeholder="Email address"
-                className="bg-white border border-[#c2c7cf]/40 py-3 px-4 text-xs flex-1 rounded-l-lg outline-none focus:ring-1 focus:ring-[#624000]"
+                className="bg-white border border-[#c2c7cf]/40 py-3 px-4 text-xs flex-1 rounded-lg sm:rounded-l-lg sm:rounded-r-none outline-none focus:ring-1 focus:ring-[#624000]"
               />
-              <button className="bg-[#624000] text-white text-[10px] font-bold px-6 rounded-r-lg hover:bg-[#4e3200] transition-colors">
+              <button className="bg-[#624000] text-white text-[10px] font-bold px-6 py-3 rounded-lg sm:rounded-r-lg sm:rounded-l-none hover:bg-[#4e3200] transition-colors">
                 JOIN
               </button>
             </div>
@@ -71,7 +71,7 @@ export default function Footer() {
           <p className="text-[10px] tracking-widest text-[#42474e] uppercase font-bold">
             © {new Date().getFullYear()} Lumiere Enfance. Crafted for the Modern Nursery.
           </p>
-          <div className="flex gap-6 text-[10px] tracking-widest text-[#42474e] uppercase font-bold">
+          <div className="flex flex-wrap justify-center gap-4 text-[10px] tracking-widest text-[#42474e] uppercase font-bold">
             <Link to="/profile" className="hover:text-[#624000] transition-colors">Privacy Policy</Link>
             <Link to="/profile" className="hover:text-[#624000] transition-colors">Terms</Link>
           </div>

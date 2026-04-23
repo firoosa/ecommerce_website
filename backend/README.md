@@ -105,3 +105,50 @@ Include the token in requests:
 ```
 Authorization: Bearer <access_token>
 ```
+
+## Deploy: Render Backend + Vercel Frontend
+
+Use this when your frontend is deployed on Vercel and backend on Render.
+
+### 1) Render (Django backend) environment variables
+
+Set these in Render:
+
+```env
+DEBUG=False
+SECRET_KEY=your-strong-secret
+
+DB_ENGINE=postgresql
+DB_NAME=...
+DB_USER=...
+DB_PASSWORD=...
+DB_HOST=...
+DB_PORT=5432
+
+ALLOWED_HOSTS=your-render-service.onrender.com
+CORS_ALLOWED_ORIGINS=https://ecommercefrontend-psi-opal.vercel.app
+CSRF_TRUSTED_ORIGINS=https://ecommercefrontend-psi-opal.vercel.app
+```
+
+After deploy, run migrations:
+
+```bash
+python manage.py migrate
+python manage.py collectstatic --noinput
+```
+
+### 2) Vercel (React frontend) environment variables
+
+Add this variable in Vercel project settings:
+
+```env
+VITE_API_BASE_URL=https://your-render-service.onrender.com/api
+```
+
+Then redeploy frontend.
+
+### 3) Quick connection test
+
+- Open frontend: `https://ecommercefrontend-psi-opal.vercel.app`
+- Try login/register; requests should go to your Render domain under `/api/...`
+- If browser shows CORS error, recheck `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` values (must match exact frontend URL with `https`).
